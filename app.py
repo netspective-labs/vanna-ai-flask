@@ -9,6 +9,7 @@ from cache import MemoryCache
 import openai
 from vanna.openai.openai_chat import OpenAI_Chat
 from vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
+import gevent
 from gevent.pywsgi import WSGIServer
 
 

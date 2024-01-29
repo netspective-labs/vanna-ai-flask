@@ -6,3 +6,4 @@ openai
 chromadb
 vanna[postgres]
 WSGIServer
+gevent
