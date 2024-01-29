@@ -9,6 +9,8 @@ from cache import MemoryCache
 import openai
 from vanna.openai.openai_chat import OpenAI_Chat
 from vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
+from gevent.pywsgi import WSGIServer
+
 
 app = Flask(__name__, static_url_path='')
 
@@ -229,5 +231,11 @@ def root():
     return app.send_static_file('index.html')
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # app.run(debug=True, host='0.0.0.0', port=5000)
     # app.run(host='0.0.0.0') 
+    host = '0.0.0.0'  # Replace with your desired IP address
+    port = 5000         # Replace with your desired port number
+
+    http_server = WSGIServer((host, port), app)
+   
+    http_server.serve_forever()
