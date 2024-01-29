@@ -5,3 +5,4 @@ python-dotenv
 openai
 chromadb
 vanna[postgres]
+WSGIServer
