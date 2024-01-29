@@ -6,24 +6,43 @@ from flask import Flask, jsonify, Response, request, redirect, url_for
 import flask
 import os
 from cache import MemoryCache
+import openai
+from vanna.openai.openai_chat import OpenAI_Chat
+from vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 
 app = Flask(__name__, static_url_path='')
 
 # SETUP
 cache = MemoryCache()
-
 # from vanna.local import LocalContext_OpenAI
 # vn = LocalContext_OpenAI()
 
-from vanna.remote import VannaDefault
-vn = VannaDefault(model=os.environ['VANNA_MODEL'], api_key=os.environ['VANNA_API_KEY'])
+# Set your OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-vn.connect_to_snowflake(
-    account=os.environ['SNOWFLAKE_ACCOUNT'],
-    username=os.environ['SNOWFLAKE_USERNAME'],
-    password=os.environ['SNOWFLAKE_PASSWORD'],
-    database=os.environ['SNOWFLAKE_DATABASE'],
-    warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
+# Database credentials
+db_credentials = {
+    "host": os.getenv("REMOTE_HOST"),
+    "user": os.getenv("REMOTE_UNAME"),
+    "password": os.getenv("REMOTE_PASSWD"),
+    "database": os.getenv("DB_NAME"),
+    "port": os.getenv("PORT"),
+}
+model = os.getenv("MODEL_NAME")
+schema_names = os.getenv("SCHEMA_NAMES")
+
+class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
+    def __init__(self, config=None):
+        ChromaDB_VectorStore.__init__(self, config=config)
+        OpenAI_Chat.__init__(self, config=config)
+
+vn = MyVanna(config={"api_key": openai.api_key, "model": model})
+vn.connect_to_postgres(
+    host=db_credentials["host"],
+    dbname=db_credentials["database"],
+    user=db_credentials["user"],
+    password=db_credentials["password"],
+    port=db_credentials["port"],
 )
 
 # NO NEED TO CHANGE ANYTHING BELOW THIS LINE
