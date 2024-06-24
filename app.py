@@ -13,7 +13,7 @@ import gevent
 from gevent.pywsgi import WSGIServer
 
 
-app = Flask(__name__, static_url_path='')
+app = Flask(__name__, static_url_path='', allow_llm_to_see_data=True)
 
 # SETUP
 cache = MemoryCache()
