@@ -33,13 +33,14 @@ db_credentials = {
 }
 model = os.getenv("MODEL_NAME")
 schema_names = os.getenv("SCHEMA_NAMES")
+chroma_path = os.getenv("CHROMA_PATH")
 
 class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
     def __init__(self, config=None):
         ChromaDB_VectorStore.__init__(self, config=config)
         OpenAI_Chat.__init__(self, config=config)
 
-vn = MyVanna(config={"api_key": openai.api_key, "model": model})
+vn = MyVanna(config={"api_key": openai.api_key, "model": model, "path": chroma_path})
 vn.connect_to_postgres(
     host=db_credentials["host"],
     dbname=db_credentials["database"],
