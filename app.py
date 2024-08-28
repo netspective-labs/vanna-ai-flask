@@ -119,12 +119,12 @@ class SimplePassword(AuthInterface):
                 return response
             else:
                 response = make_response(
-                    redirect(url_for('login', message="Login failed.", message_type="error"))
+                    redirect(url_for('login_error', message="Login failed.", message_type="error"))
                 )
                 return response
         else:
             response = make_response(
-                redirect(url_for('login', message="User not found", message_type="error"))
+                redirect(url_for('login_error', message="User not found", message_type="error"))
             )
             return response
 
@@ -409,6 +409,45 @@ def denied():
 def handle_register():
     return auth.registration_handler(request)
 
+@flask_app.route('/login-error')
+def login_error():
+    message = request.args.get("message", "")
+    message_type = request.args.get("message_type", "info")
+    return f'''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login Error</title>
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+        <style>
+            body {{
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                background-color: #f8f9fa;
+            }}
+            .error-container {{
+                background-color: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            }}
+            .error-message {{
+                color: {'red' if message_type == 'error' else 'green'};
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="error-container text-center">
+            <h2 class="error-message">{message}</h2>            
+            <a href="/login" class="btn btn-primary">Go to Login</a>
+        </div>
+    </body>
+    </html>
+    '''
 
 class CustomVannaFlaskApp(VannaFlaskApp):
     def __init__(self, *args, **kwargs):

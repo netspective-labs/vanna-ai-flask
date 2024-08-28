@@ -1,7 +1,5 @@
 {
     "users": [
-        {"name": "", "email": "", "password": "", "role": ""},
-        {"name": "", "email": "", "password": "", "role": ""}
-
+        {"name": "adminuser", "email": "adminuser@example.com", "password": "test", "role": "admin"}
     ]
 }
