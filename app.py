@@ -137,6 +137,7 @@ class SimplePassword(AuthInterface):
     def logout_handler(self, flask_request) -> str:
         response = make_response(redirect(url_for('login')))
         response.delete_cookie('user')
+        response.delete_cookie('role')
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
@@ -368,19 +369,24 @@ else:
     print("No valid schema name found, setting default initial training data.")
 
 auth = SimplePassword(db_connection='users.json')
+app_params = {
+    "vn": vn,
+    "allow_llm_to_see_data": True,
+    "title": "English To SQL",
+    "subtitle": "",
+    "show_training_data": True,
+    "sql": True,
+    "table": True,
+    "chart": True,
+    "summarization": False,
+    "ask_results_correct": True,
+    "debug": False,
+}
+ENABLE_VANNA_LOGIN = os.getenv("ENABLE_VANNA_LOGIN")
+if ENABLE_VANNA_LOGIN == 'True':
+    app_params['auth'] = auth
 app = VannaFlaskApp(
-    vn=vn,
-    auth=auth,
-    allow_llm_to_see_data=True,
-    title="English To SQL",
-    subtitle="",
-    show_training_data=True,
-    sql=True,
-    table=True,
-    chart=True,
-    summarization=False,
-    ask_results_correct=True,
-    debug=False,
+    **app_params
 )
 
 memory_cache = MemoryCache()
