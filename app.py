@@ -13,8 +13,9 @@ from vanna.openai.openai_chat import OpenAI_Chat
 from vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 import gevent
 from gevent.pywsgi import WSGIServer
-from vanna.flask import VannaFlaskApp
-from vanna.flask.auth import AuthInterface
+from vanna.flask import VannaFlaskApp, Cache
+from vanna.base.base import VannaBase
+from vanna.flask.auth import AuthInterface , NoAuth
 import json
 
 flask_app = Flask(__name__, static_url_path='')
@@ -369,25 +370,129 @@ else:
     print("No valid schema name found, setting default initial training data.")
 
 auth = SimplePassword(db_connection='users.json')
-app_params = {
-    "vn": vn,
-    "allow_llm_to_see_data": True,
-    "title": "English To SQL",
-    "subtitle": "",
-    "show_training_data": True,
-    "sql": True,
-    "table": True,
-    "chart": True,
-    "summarization": False,
-    "ask_results_correct": True,
-    "debug": False,
-}
+
+
+class CustomVannaFlask(VannaFlaskApp):
+    def __init__(
+            self,
+            vn: VannaBase,
+            cache: Cache = MemoryCache(),
+            auth: AuthInterface = NoAuth(),
+            debug=False,
+            allow_llm_to_see_data=True,
+            logo="https://img.vanna.ai/vanna-flask.svg",
+            title="English To SQL",
+            subtitle="",
+            show_training_data=True,
+            suggested_questions=True,
+            sql=True,
+            table=True,
+            csv_download=True,
+            chart=True,
+            redraw_chart=True,
+            auto_fix_sql=True,
+            ask_results_correct=True,
+            followup_questions=True,
+            summarization=False,
+            function_generation=False,
+            index_html_path=None,
+            assets_folder=None,
+    ):
+        # Initialize the parent class VannaFlaskApp
+        super().__init__(
+            vn,
+            cache,
+            auth,
+            debug,
+            allow_llm_to_see_data,
+            logo,
+            title,
+            subtitle,
+            show_training_data,
+            suggested_questions,
+            sql,
+            table,
+            csv_download,
+            chart,
+            redraw_chart,
+            auto_fix_sql,
+            ask_results_correct,
+            followup_questions,
+            summarization,
+            function_generation,
+            index_html_path,
+            assets_folder,
+        )
+        self.override_routes()
+
+    def override_routes(self):
+        """Override routes with custom implementations."""
+        self.flask_app.view_functions.pop("generate_followup_questions", None)
+
+        @self.flask_app.route("/api/v0/generate_followup_questions", methods=["GET"])
+        @self.requires_auth
+        @self.requires_cache(["df", "question", "sql"])
+        def generate_followup_questions(user: any, id: str, df, question, sql):
+            """
+            Overrides Generate followup questions function by limiting the dataframe rows
+            ---
+            parameters:
+              - name: user
+                in: query
+              - name: id
+                in: query|body
+                type: string
+                required: true
+            responses:
+              200:
+                schema:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      default: question_list
+                    questions:
+                      type: array
+                      items:
+                        type: string
+                    header:
+                      type: string
+            """
+            if self.allow_llm_to_see_data:
+                followup_questions = self.vn.generate_followup_questions(
+                    question=question, sql=sql, df=df.head(100)
+                )
+
+                if followup_questions is not None and len(followup_questions) > 5:
+                    followup_questions = followup_questions[:5]
+
+                self.cache.set(id=id, field="followup_questions", value=followup_questions)
+
+                return jsonify(
+                    {
+                        "type": "question_list",
+                        "id": id,
+                        "questions": followup_questions,
+                        "header": "Here are some potential followup questions:",
+                    }
+                )
+            else:
+                self.cache.set(id=id, field="followup_questions", value=[])
+                return jsonify(
+                    {
+                        "type": "question_list",
+                        "id": id,
+                        "questions": [],
+                        "header": "Followup Questions can be enabled if you set allow_llm_to_see_data=True",
+                    }
+                )
+
+
 ENABLE_VANNA_LOGIN = os.getenv("ENABLE_VANNA_LOGIN")
 if ENABLE_VANNA_LOGIN == 'True':
-    app_params['auth'] = auth
-app = VannaFlaskApp(
-    **app_params
-)
+    app = CustomVannaFlask(vn=vn, cache=MemoryCache(), auth=auth)
+else:
+    app = CustomVannaFlask(vn=vn, cache=MemoryCache())
 
 memory_cache = MemoryCache()
 flask_app = app.flask_app
@@ -454,181 +559,6 @@ def login_error():
     </body>
     </html>
     '''
-
-class CustomVannaFlaskApp(VannaFlaskApp):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.flask_app = flask_app
-        self.add_routes()
-
-    def requires_cache(fields):
-        def decorator(f):
-            @wraps(f)
-            def decorated(*args, **kwargs):
-                id = request.args.get('id')
-                if id is None:
-                    return jsonify({"type": "error", "error": "No id provided"})
-                for field in fields:
-                    if cache.get(id=id, field=field) is None:
-                        return jsonify({"type": "error", "error": f"No {field} found"})
-                field_values = {field: cache.get(id=id, field=field) for field in fields}
-                field_values['id'] = id
-                return f(*args, **field_values, **kwargs)
-
-            return decorated
-
-        return decorator
-
-    def add_routes(self):
-        @self.flask_app.route('/api/v0/generate_questions', methods=['GET'])
-        def generate_questions():
-            return jsonify({
-                "type": "question_list",
-                "questions": vn.generate_questions(),
-                "header": "Here are some questions you can ask:"
-            })
-
-        @self.flask_app.route('/api/v0/generate_sql', methods=['GET'])
-        def generate_sql():
-            question = flask.request.args.get('question')
-            if question is None:
-                return jsonify({"type": "error", "error": "No question provided"})
-            id = cache.generate_id(question=question)
-            sql = vn.generate_sql(question=question, allow_llm_to_see_data=True)
-            cache.set(id=id, field='question', value=question)
-            cache.set(id=id, field='sql', value=sql)
-            return jsonify(
-                {
-                    "type": "sql",
-                    "id": id,
-                    "text": sql,
-                })
-
-        @self.flask_app.route('/api/v0/run_sql', methods=['GET'])
-        @self.requires_cache(['sql'])
-        def run_sql(id: str, sql: str):
-            try:
-                df = vn.run_sql(sql=sql)
-                cache.set(id=id, field='df', value=df)
-                return jsonify(
-                    {
-                        "type": "df",
-                        "id": id,
-                        "df": df.head(10).to_json(orient='records'),
-                    })
-            except Exception as e:
-                return jsonify({"type": "error", "error": str(e)})
-
-        @self.flask_app.route('/api/v0/download_csv', methods=['GET'])
-        @self.requires_cache(['df'])
-        def download_csv(id: str, df):
-            csv = df.to_csv()
-            return Response(
-                csv,
-                mimetype="text/csv",
-                headers={"Content-disposition":
-                             f"attachment; filename={id}.csv"})
-
-        @self.flask_app.route('/api/v0/generate_plotly_figure', methods=['GET'])
-        @self.requires_cache(['df', 'question', 'sql'])
-        def generate_plotly_figure(id: str, df, question, sql):
-            try:
-                code = vn.generate_plotly_code(question=question, sql=sql,
-                                               df_metadata=f"Running df.dtypes gives:\n {df.dtypes}")
-                fig = vn.get_plotly_figure(plotly_code=code, df=df, dark_mode=False)
-                fig_json = fig.to_json()
-                cache.set(id=id, field='fig_json', value=fig_json)
-                return jsonify(
-                    {
-                        "type": "plotly_figure",
-                        "id": id,
-                        "fig": fig_json,
-                    })
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                return jsonify({"type": "error", "error": str(e)})
-
-        @self.flask_app.route('/api/v0/get_training_data', methods=['GET'])
-        def get_training_data():
-            df = vn.get_training_data()
-            return jsonify(
-                {
-                    "type": "df",
-                    "id": "training_data",
-                    "df": df.head(25).to_json(orient='records'),
-                })
-
-        @self.flask_app.route('/api/v0/remove_training_data', methods=['POST'])
-        def remove_training_data():
-            # Get id from the JSON body
-            id = flask.request.json.get('id')
-            if id is None:
-                return jsonify({"type": "error", "error": "No id provided"})
-            if vn.remove_training_data(id=id):
-                return jsonify({"success": True})
-            else:
-                return jsonify({"type": "error", "error": "Couldn't remove training data"})
-
-        @self.flask_app.route('/api/v0/train', methods=['POST'])
-        def add_training_data():
-            question = flask.request.json.get('question')
-            sql = flask.request.json.get('sql')
-            ddl = flask.request.json.get('ddl')
-            documentation = flask.request.json.get('documentation')
-            try:
-                id = vn.train(question=question, sql=sql, ddl=ddl, documentation=documentation)
-                return jsonify({"id": id})
-            except Exception as e:
-                print("TRAINING ERROR", e)
-                return jsonify({"type": "error", "error": str(e)})
-
-        @self.flask_app.route('/api/v0/generate_followup_questions', methods=['GET'])
-        @self.requires_cache(['df', 'question'])
-        def generate_followup_questions(id: str, df, question, sql):
-            followup_questions = vn.generate_followup_questions(question=question, sql=sql, df=df)
-            cache.set(id=id, field='followup_questions', value=followup_questions)
-            return jsonify(
-                {
-                    "type": "question_list",
-                    "id": id,
-                    "questions": followup_questions,
-                    "header": "Here are some followup questions you can ask:"
-                })
-
-        @self.flask_app.route('/api/v0/load_question', methods=['GET'])
-        @self.requires_cache(['question', 'sql', 'df', 'fig_json', 'followup_questions'])
-        def load_question(id: str, question, sql, df, fig_json, followup_questions):
-            try:
-                return jsonify(
-                    {
-                        "type": "question_cache",
-                        "id": id,
-                        "question": question,
-                        "sql": sql,
-                        "df": df.head(10).to_json(orient='records'),
-                        "fig": fig_json,
-                        "followup_questions": followup_questions,
-                    })
-            except Exception as e:
-                return jsonify({"type": "error", "error": str(e)})
-
-        @self.flask_app.route('/api/v0/get_question_history', methods=['GET'])
-        def get_question_history():
-            return jsonify({"type": "question_history", "questions": cache.get_all(field_list=['question'])})
-
-        # Login and Logout Routes
-        @self.flask_app.route('/auth/login', methods=['POST'])
-        def login():
-            return auth.login_handler(request)
-
-        @self.flask_app.route('/auth/logout', methods=['GET'])
-        def logout():
-            return auth.logout_handler(request)
-
-        @self.flask_app.route('/', methods=['GET'])
-        def signin():
-            return render_template_string(auth.login_form())
 
 
 if __name__ == '__main__':
