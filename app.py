@@ -325,32 +325,28 @@ vn.connect_to_postgres(
 )
 
 
-def get_schema_names(env_var: str) -> Optional[List[str]]:
-    """Fetch and parse the schema names from the environment variable."""
-    schema_names_str: Optional[str] = os.getenv(env_var)
-    if schema_names_str:
-        try:
-            print(schema_names_str)
-            schema_names_list: List[str] = ast.literal_eval(schema_names_str)
-            return schema_names_list
-        except (ValueError, SyntaxError):
-            print(f"Error parsing the schema names from {env_var}")
-            return None
-    return None
+def get_schema_name(env_var: str) -> Optional[str]:
+    """Fetch the schema name from the environment variable."""
+    schema_name: Optional[str] = os.getenv(env_var)
+
+    if schema_name:
+        print(f"Schema Name from Environment Variable: {schema_name}")
+        return schema_name
+    else:
+        print(f"No schema name found in environment variable: {env_var}")
+        return None
 
 
-def get_default_schema_name(schema_names: Optional[List[str]]) -> Optional[str]:
-    """Return the first schema name from the list if available."""
-    if schema_names:
-        return schema_names[0]
-    return None
+def get_default_schema_name(schema_name: Optional[str]) -> Optional[str]:
+    """Return the schema name if available."""
+    return schema_name
 
 
-# Fetch the schema names from the environment variable
-schema_names: Optional[List[str]] = get_schema_names("SCHEMA_NAMES")
+# Fetch the schema name from the environment variable
+schema_name: Optional[str] = get_schema_name("SCHEMA_NAME")
 
-# Get the default schema name
-default_schema_name: Optional[str] = get_default_schema_name(schema_names)
+# Get the default schema name (since it's a string, it will just return it)
+default_schema_name: Optional[str] = get_default_schema_name(schema_name)
 
 # Log the schema name and prepare the SQL query
 if default_schema_name:
