@@ -343,7 +343,7 @@ def get_default_schema_name(schema_name: Optional[str]) -> Optional[str]:
 
 
 # Fetch the schema name from the environment variable
-schema_name: Optional[str] = get_schema_name("SCHEMA_NAME")
+schema_name: Optional[str] = get_schema_name("SCHEMA_NAMES")
 
 # Get the default schema name (since it's a string, it will just return it)
 default_schema_name: Optional[str] = get_default_schema_name(schema_name)
